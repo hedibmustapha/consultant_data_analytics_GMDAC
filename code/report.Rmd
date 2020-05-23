@@ -24,8 +24,336 @@ knitr::opts_chunk$set(warning = FALSE)
 knitr::opts_chunk$set(error = FALSE)
 ```
 
-```{r}
-load("../.RData")
+```{r functions}
+#install only packages not available in the library
+install_new_packages <- function(list.of.packages){
+  new.packages <- list.of.packages[!(list.of.packages %in%                                      installed.packages()[,"Package"])]
+  if(length(new.packages)) install.packages(new.packages) 
+}
+
+#sanitize dataframe headers
+to_alphanumeric_lowercase <- function(x){
+  tolower(gsub("[^a-zA-Z0-9_]", "\\.", x))
+}
+
+#read csv files
+import_csv <- function(path_tofile){
+  assertthat::assert_that(grepl(x = path_tofile, pattern = ".csv$"), 
+                          msg = "file must end with '.csv' (..and actually be a .csv file)")
+  df <- data.table::fread(file = path_tofile, 
+                          stringsAsFactors = F,
+                          na.strings = c("","na","n/a","NA",NA)) %>%                                                     as.data.frame
+  colnames(df) <- to_alphanumeric_lowercase(colnames(df))
+  return(df)
+}
+
+#Creates a weighting function from sampling frame
+create_weights <- function(sampling.frame, data.stratum.column, 
+                           sampling.frame.population.column = "population", 
+                           sampling.frame.stratum.column = "strata.names", data = NULL){
+  surveyweights::weighting_fun_from_samplingframe(
+    sampling.frame =  sampling.frame, 
+    data.stratum.column = data.stratum.column, 
+sampling.frame.population.column = sampling.frame.population.column, 
+sampling.frame.stratum.column = sampling.frame.stratum.column, 
+data = data)
+}
+
+plot_animated_ggplot <- function(summary_object, categories, numbers, states,plot_title){
+  categories <- sym(categories)
+  numbers <- sym(numbers)
+  states <- sym(states)
+  ggplot(summary_object, aes(x = !!categories, 
+                        y = !!numbers * 100, fill = !!categories)) +
+  geom_col(position = 'dodge') + 
+  labs(title = plot_title,
+       x = NULL,
+       y = NULL) +
+  theme_minimal() + 
+  theme(
+    legend.position = 'none',      
+    plot.title = element_text(hjust = 0.5),
+    text = element_text('Arial Narrow'),
+    strip.text = element_text(face = 'bold', hjust = 0),
+    panel.grid.minor = element_blank()
+  ) +
+  geom_text(aes(label = paste(round(!!numbers * 100), "%")),
+            position=position_dodge(width=0.9),
+            vjust = -0.5) +
+  transition_states(states = !!states) +
+  enter_grow() + 
+  exit_fade()
+}
+
+plot_flipped_ggplot <- function(summary_object, categories, numbers, plot_title){
+  categories <- sym(categories)
+  numbers <- sym(numbers)
+  ggplot(summary_object, aes(x = reorder(!!categories, !!numbers), 
+                               y = !!numbers * 100, fill = !!categories)) +
+  geom_col(position = 'dodge') + 
+  labs(title = plot_title,
+       x = NULL,
+       y = NULL) +
+  theme_minimal() + 
+  theme(
+    legend.position = 'none',      
+    plot.title = element_text(hjust = 0.5),
+    text = element_text('Arial Narrow'),
+    strip.text = element_text(face = 'bold', hjust = 0),
+    panel.grid.minor = element_blank()
+  ) +
+  geom_text(aes(label = paste(round(!!numbers * 100), "%")),
+            position=position_dodge(width=0.9),
+            hjust = -0.5) +
+  ylim(0, 100) +
+  coord_flip()
+}
+
+plot_animated_flipped_ggplot <- function(summary_object, categories, numbers, states, plot_title){
+  categories <- sym(categories)
+  numbers <- sym(numbers)
+  states <- sym(states)
+  ggplot(summary_object, aes(x = reorder(!!categories, !!numbers), 
+                             y = !!numbers * 100, fill = !!categories)) +
+    geom_col(position = 'dodge') + 
+    labs(title = plot_title,
+         x = NULL,
+         y = NULL) +
+    theme_minimal() + 
+    theme(
+      legend.position = 'none',      
+      plot.title = element_text(hjust = 0.5),
+      text = element_text('Arial Narrow'),
+      strip.text = element_text(face = 'bold', hjust = 0),
+      panel.grid.minor = element_blank()
+    ) +
+    geom_text(aes(label = paste(round(!!numbers * 100), "%")),
+              position=position_dodge(width=0.9),
+              hjust = -0.5) +
+    ylim(0, 100) +
+    coord_flip() +
+    transition_states(states = !!states) +
+    enter_grow() + 
+    exit_fade()
+}
+
+f <- function(x) {
+  r <- quantile(x, probs = c(0.00, 0.25, 0.5, 0.75, 1))
+  names(r) <- c("ymin", "lower", "middle", "upper", "ymax")
+  r}
+
+#Map results to an output template
+render_report_rmd <- function(x, dir, filename) {
+  
+  template <- "code/report.Rmd"
+  render_environment <- new.env()
+  
+  render_environment$x <- x
+  rmarkdown::render(
+    template,
+    output_file = filename,
+    output_dir = dir,
+    intermediates_dir = dir,
+    envir = render_environment,
+    knit_root_dir = getwd()
+  )
+  
+}
+```
+
+```{r dependencies, eval=TRUE, results= 'hide'}
+list.of.packages <- c(
+  'assertthat',
+  'data.table',
+  'surveyweights',
+  'stringr',
+  'tidyverse',
+  'srvyr',
+  'gganimate',
+  'ggthemes',
+  'plotly',
+  'extrafont',
+  'DT',
+  'magick',
+  'magrittr'
+)
+
+#Install new packages
+install_new_packages(list.of.packages)
+
+library(assertthat)
+library(data.table)
+library(surveyweights)
+library(stringr)
+library(tidyverse)
+library(srvyr)
+library(gganimate)
+library(ggthemes)
+library(plotly)
+library(extrafont)
+library(DT)
+library(magick)
+library(magrittr)
+fonts()
+fonttable()
+```
+
+```{r data_preparation}
+# Load dataset
+data <- import_csv(path_tofile = "../input/data.csv")
+
+#Load sampling frame
+sampling_frame <- import_csv(path_tofile = "../input/sampling_frame.csv")
+
+# adding new indicators
+data <- data %>% mutate(
+  strata.names = str_c(mantika_label,displacement_status,sep = "_"),
+  fcs = (cereals * 2) + (legumes * 3) + veggies + fruits + (meat * 4) + (dairy * 4) + (fats * 0.5) + (sugar * 0.5),
+  fcs_category = case_when(
+    fcs <= 28 ~ "poor",
+    fcs > 28 & fcs <= 42 ~ "borderline",
+    fcs > 42 ~ "acceptable"
+  ),
+  rcsi = less_expensive_quality + (borrow_relatives * 2) + reduce_number_meals + (reduce_adult * 3) + shrink_meals,
+  rcsi_category = case_when(
+    rcsi <= 3 ~ "low",
+    rcsi > 3 & rcsi <= 9 ~ "medium",
+    rcsi > 9 ~ "high"
+  ),
+  total_income = rowSums(select(.,gvt_salary,gvt_social_benefits,
+                                non_gvt_salary,casual_labour,
+                                own_business_income,
+                                remittances,
+                                family_support,
+                                humanitarian_assistance,
+                                zakat,income_other) 
+                         , na.rm=T),
+  total_income = ifelse(total_income ==0, NA,total_income),
+  total_expenditures = rowSums(select(.,food_expenditure,
+                                      rent_expenditure,
+                                      shelter_maintenance_expenditure,
+                                      water_expenditure,
+                                      nfi_expenditure,
+                                      utilities_expenditure,
+                                      fuel_expenditure,
+                                      health_related_expenditure,
+                                      education_related_expenditure
+                                      ,
+                                      transportation_expenditure,
+                                      mobile_phone_credit_expenditure,
+                                      productive_assets_expenditure,
+                                      debt_repayment_expenditure,
+                                      other_expenditure),
+                               na.rm=T),
+  total_expenditures = ifelse(total_expenditures == 0, NA, total_expenditures),
+  lcsi_stress = rowSums(select(., sold_nonproductive_hh_assets,
+                                  spent_savings,
+                                  borrowed_purchased_oncredit_food,
+                                  reduced_expenditures_essential_nfi) %>%
+                                 mutate_all(~ .x %in% c("already_exhausted_this_coping_strategy", "yes")),
+                               na.rm = T),
+  lcsi_crisis = rowSums(select(.,sold_productive_hh_assets,
+                                borrowed_money,
+                                reduced_expenditures_health_education,
+                                took_additional_job,
+                                child_dropped_school,
+                                delayed_skipped_rent) %>%
+                                 mutate_all(~ .x %in% c("already_exhausted_this_coping_strategy", "yes")),
+                               na.rm = T),
+  lcsi_emergency = rowSums(select(.,begging,
+                                  adult_accepting_degrading_illegal_work,
+                                  minor_accepting_degrading_illegal_work,
+                                  child_marriage) %>%
+                                    mutate_all(~ .x %in% c("already_exhausted_this_coping_strategy", "yes")),
+                                  na.rm = T),
+  lcsi = case_when(
+    lcsi_emergency > 0 ~ "emergency",
+    lcsi_crisis > 0 ~ "crisis",
+    lcsi_stress > 0 ~ "stress",
+    lcsi_emergency + lcsi_crisis + lcsi_stress == 0 ~ "none"
+  )
+)
+
+#create weighting fct
+weights <- create_weights(sampling.frame = sampling_frame,
+                          data.stratum.column = "strata.names",
+                          sampling.frame.population.column = "population",
+                          sampling.frame.stratum.column = "strata.names",
+                          data = data)
+
+data <- data %>% mutate(
+  strata.weights = weights(data)
+)
+
+```
+
+```{r data_analysis}
+# create survey design
+design <- data %>% as_survey(weights = c(strata.weights))
+
+fcs_summary <- design %>% 
+  group_by(displacement_status,fcs_category) %>% 
+  summarize(numbers = survey_mean())
+
+rcsi_summary <- design %>% 
+  group_by(displacement_status,rcsi_category) %>% 
+  summarize(numbers = survey_mean())
+
+
+lcsi_summary <- design %>% 
+  group_by(displacement_status,lcsi) %>% 
+  summarize(numbers = survey_mean(na.rm =T))
+
+foodsource_summary <- design %>%  
+  summarize(Market_purchased_cash = survey_mean(food_source.market_cash),
+            Market_purchased_cheque = survey_mean(food_source.market_cheque),
+            Market_purchased_credit = survey_mean(food_source.market_credit)) %>%
+  pivot_longer(c(Market_purchased_cash,
+                 Market_purchased_cheque,
+                 Market_purchased_credit))
+
+
+watersource_summary <- design %>% 
+  group_by(primary_drinkingwater_source) %>%
+  summarize(numbers = survey_mean()) %>% 
+  arrange(-numbers)
+
+access_publicwater_summary <- design %>% 
+  group_by(displacement_status, access_public_water_network) %>%
+  summarize(numbers = survey_mean()) %>% 
+  arrange(-numbers)
+
+ income_summary <- design %>% 
+   group_by(displacement_status) %>%
+  summarize(
+    numbers = survey_median(total_income, na.rm = T, vartype = NULL),
+    income = survey_quantile(total_income, quantile = c(0,0.25, 0.75,1), vartype = NULL, na.rm = T)) %>% 
+   mutate(level = "income")
+ 
+ income_summary$displacement_status <- with(income_summary,
+                                            reorder(income_summary$displacement_status,
+        numbers,function(x) - median(x, na.rm=TRUE)))
+ 
+ income_summary_strata <- design %>% group_by(mantika_label,displacement_status) %>%
+   summarize(
+     numbers = survey_median(total_income, na.rm = T, vartype = NULL)
+   )
+ 
+ expenditure_summary <- design %>% group_by(displacement_status) %>%
+   summarize(
+     numbers = survey_median(total_expenditures, na.rm = T, vartype = NULL),
+     expenditure = survey_quantile(total_expenditures, quantile = c(0,0.25, 0.75,1), vartype = NULL, na.rm = T)
+   ) %>% mutate(
+     level = "expenditure"
+   )
+ 
+  expenditure_summary_strata <- design %>% group_by(mantika_label,displacement_status) %>%
+   summarize(
+     numbers = survey_median(total_expenditures, na.rm = T, vartype = NULL)
+   )
+ 
+ income_expenditure <- bind_rows(income_summary,expenditure_summary)
+
 ```
 
 # FOOD SECURITY
@@ -33,24 +361,42 @@ load("../.RData")
 
 ## FCS (Food Consumption Score)
 ```{r}
-p1 
+plot_animated_ggplot(fcs_summary,
+                     "fcs_category",
+                     "numbers",
+                     "displacement_status",
+                     "% of HHs with an acceptable, borderline or poor 
+                     FCS (Food Consumption Score) for {closest_state}") 
 ```
 
 ## rCSI (reduced Coping Strategy Index)
 ```{r}
-p2 
+plot_animated_ggplot(rcsi_summary,
+                     "rcsi_category",
+                     "numbers",
+                     "displacement_status",
+                     "% of HHs with low, medium or high rCSI 
+                    (reduced Coping Strategy Index) for {closest_state}")
 ```
 
 
 ## LCSI (Livelihood Coping Strategy Index)
 ```{r}
-p3
+plot_animated_ggplot(lcsi_summary,
+                     "lcsi",
+                     "numbers",
+                     "displacement_status",
+                     "% of HHs with a stress, crisis or emergency LCSI 
+  (Livelihood Coping Strategy Index) for {closest_state}")
 ```
 
 
 ## Food Sources
 ```{r}
-p4
+plot_flipped_ggplot(foodsource_summary,
+                    "name",
+                    "value",
+                    "Top 3 sources from which households reported acquiring food")
 
 ```
 
@@ -60,13 +406,19 @@ p4
 
 ## Water sources
 ```{r}
-p5
+plot_flipped_ggplot(watersource_summary,
+                    "primary_drinkingwater_source",
+                    "numbers",
+                    "Main reported sources of drinking water")
 ```
 
 
 ## Access for public water network
 ```{r}
-p6
+plot_animated_flipped_ggplot(access_publicwater_summary,
+                             "access_public_water_network","numbers",
+                              "displacement_status",
+                              "access to the water from the public network in the last 7 days for {closest_state}")
 ```
 
 
@@ -75,25 +427,57 @@ p6
 ## Distribution of income
 
 ```{r}
-p7
+ggplot(income_summary, aes(x=displacement_status, 
+                            ymin = income_q00, 
+                            lower = income_q25, 
+                            middle = numbers, 
+                            upper = income_q75, 
+                            ymax = income_q100,
+                            width = 0.7, 
+                            fill = displacement_status)) +
+   geom_boxplot(stat = "identity") +
+   theme_bw() +
+   theme(legend.position = 'none',
+         plot.title = element_text(hjust = 0.5),
+         text = element_text('Arial Narrow'),
+         panel.grid.major.x = element_blank(),
+         panel.grid.major.y = element_line(size=.1, color="grey85"),
+         panel.grid.minor = element_blank(),
+         axis.text.x = element_text(angle = 0, size = 10.2, hjust = 0.5)) +
+   labs(title = "Median total income by displacement groups",
+        x = NULL,
+        y = " Income (LYD)") +
+   geom_text(data = income_summary, 
+             aes(y = numbers, label = round(numbers,digits = 0)),
+             size = 3.52, hjust = -2.57, vjust =  0.6)
 ```
 
 ## Distribution of income VS Distribution of expenditure
 ```{r}
-p8
+plot_ly(income_expenditure, 
+        x = ~displacement_status, 
+        y = ~numbers, type = 'bar',
+        color = ~level) %>%
+   layout(title = "Median total income VS Median Total expenditure",               yaxis = list(title = "LYD"), 
+          xaxis = list(title = ""), 
+          barmode = 'group')
 ```
 
 ## Income & revenue data {.tabset .tabset-fade .tabset-pills}
 
 ### Median Income
 ```{r}
-income_dt
+   income_summary_strata %>% 
+   dplyr::rename(Medians = numbers) %>% 
+   datatable()
 
 ```
 
 ### Median expenditure
 ```{r}
-expenditure_dt
+   expenditure_summary_strata %>% 
+   dplyr::rename(Medians = numbers) %>% 
+   datatable()
 
 ```
 
