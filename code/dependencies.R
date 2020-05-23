@@ -12,7 +12,8 @@ list.of.packages <- c(
   'plotly',
   'extrafont',
   'DT',
-  'magick'
+  'magick',
+  'magrittr'
 )
 
 #Install new packages
@@ -30,5 +31,6 @@ library(plotly)
 library(extrafont)
 library(DT)
 library(magick)
+library(magrittr)
 fonts()
 fonttable()

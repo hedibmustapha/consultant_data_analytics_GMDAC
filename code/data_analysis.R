@@ -1,3 +1,4 @@
+source("./code/data_preparation.R")
 
 # create survey design
 design <- data %>% as_survey(weights = c(strata.weights))
@@ -110,6 +111,16 @@ p6 <- plot_animated_flipped_ggplot(access_publicwater_summary,"access_public_wat
  p8 <- plot_ly(income_expenditure, x = ~displacement_status, y = ~numbers, type = 'bar',color = ~level) %>%
    layout(title = "Median total income VS Median Total expenditure", yaxis = list(title = "LYD"), xaxis = list(title = ""), barmode = 'group')
  
+ income_dt <- income_summary_strata %>% dplyr::rename(
+   Medians = numbers
+ ) %>% datatable()
+ 
+ expenditure_dt <- expenditure_summary_strata %>% dplyr::rename(
+   Medians = numbers
+ ) %>% datatable()
+ 
+ 
+ #save.image()
  
  # results <- list(fcs_summary=fcs_summary,
  #                 rcsi_summary=rcsi_summary,
@@ -127,3 +138,4 @@ p6 <- plot_animated_flipped_ggplot(access_publicwater_summary,"access_public_wat
  # render_report_rmd(x = results,
  #                   dir = "./output",
  #                   filename = "report.html")
+ 

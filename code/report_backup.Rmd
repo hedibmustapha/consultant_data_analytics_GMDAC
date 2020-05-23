@@ -1,0 +1,122 @@
+---
+title: "Sample R scripts for Consultant Data Analytics, GMDAC Job Offer"
+author: "Hedi Ben Mustapha"
+output: 
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float:
+      collapsed: true
+      smooth_scroll: true
+    number_sections: true
+    highlight: null
+    css: style.css
+    df_print: paged
+    mathjax: local
+    self_contained: false
+    
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(error = FALSE)
+knitr::opts_chunk$set(results = FALSE)
+```
+
+
+# FOOD SECURITY
+
+
+## FCS (Food Consumption Score)
+```{r}
+p1 <- plot_animated_ggplot(x$fcs_summary,"fcs_category","numbers","displacement_status",
+                             "% of HHs with an acceptable, borderline or poor FCS 
+                             (Food Consumption Score) for {closest_state}")
+anim_save("p1.gif", p1)
+```
+![](../p1.gif)
+
+## rCSI (reduced Coping Strategy Index)
+```{r, echo=FALSE}
+p2 <- plot_animated_ggplot(x$rcsi_summary,"rcsi_category","numbers","displacement_status",
+                             "% of HHs with low, medium or high rCSI 
+       (reduced Coping Strategy Index) for {closest_state}")
+anim_save("p2.gif", p2)
+```
+
+![](../p2.gif)
+
+## LCSI (Livelihood Coping Strategy Index)
+```{r, echo=FALSE}
+p3 <- plot_animated_ggplot(x$lcsi_summary,"lcsi","numbers","displacement_status",
+                             "% of HHs with a stress, crisis or emergency LCSI 
+  (Livelihood Coping Strategy Index) for {closest_state}")
+anim_save("p3.gif", p3)
+```
+
+![](../p3.gif)
+
+## Food Sources
+```{r, echo=FALSE, results=TRUE}
+p4 <- plot_flipped_ggplot(x$foodsource_summary,"name","value",
+                          "Top 3 sources from which households reported acquiring food")
+p4
+
+```
+
+
+# WATER, SANITATION & HYGIENE (WASH) {.tabset .tabset-fade .tabset-pills}
+
+
+## Water sources
+```{r, echo=FALSE, results=TRUE}
+p5 <- plot_flipped_ggplot(x$watersource_summary,"primary_drinkingwater_source","numbers",
+                          "Main reported sources of drinking water")
+p5
+```
+
+
+## Access for public water network
+```{r, echo=FALSE}
+p6 <- plot_animated_flipped_ggplot(x$access_publicwater_summary,"access_public_water_network","numbers",
+          "displacement_status",
+          "access to the water from the public network in the last 7 days for {closest_state}")
+anim_save("p6.gif", p6)
+```
+
+![](../p6.gif)
+
+
+# CASH & MARKETS
+
+## Distribution of income
+
+```{r, results=TRUE}
+x$p7
+```
+
+## Distribution of income VS Distribution of expenditure
+```{r, results=TRUE}
+x$p8
+```
+
+## Income & revenue data {.tabset .tabset-fade .tabset-pills}
+
+### Median Income
+```{r, results=TRUE}
+x$income_summary_strata %>% dplyr::rename(
+  Medians = numbers
+) %>% datatable()
+
+```
+
+### Median expenditure
+```{r, results=TRUE}
+x$expenditure_summary_strata %>% dplyr::rename(
+  Medians = numbers
+) %>% datatable()
+
+```
+
