@@ -1,0 +1,54 @@
+"0","plot_animated_ggplot
+"
+"1","function(summary_object, categories, numbers, states,plot_title){
+"
+"1","  categories <- sym(categories)
+"
+"1","  numbers <- sym(numbers)
+"
+"1","  states <- sym(states)
+"
+"1","  ggplot(summary_object, aes(x = !!categories, 
+"
+"1","                        y = !!numbers * 100, fill = !!categories)) +
+"
+"1","  geom_col(position = 'dodge') + 
+"
+"1","  labs(title = plot_title,
+"
+"1","       x = NULL,
+"
+"1","       y = NULL) +
+"
+"1","  theme_minimal() + 
+"
+"1","  theme(
+"
+"1","    legend.position = 'none',      
+"
+"1","    plot.title = element_text(hjust = 0.5),
+"
+"1","    text = element_text('Arial Narrow'),
+"
+"1","    strip.text = element_text(face = 'bold', hjust = 0),
+"
+"1","    panel.grid.minor = element_blank()
+"
+"1","  ) +
+"
+"1","  geom_text(aes(label = paste(round(!!numbers * 100), ""%"")),
+"
+"1","            position=position_dodge(width=0.9),
+"
+"1","            vjust = -0.5) +
+"
+"1","  transition_states(states = !!states) +
+"
+"1","  enter_grow() + 
+"
+"1","  exit_fade()
+"
+"1","}
+"
+"1","<bytecode: 0x00000000394bbd40>
+"
